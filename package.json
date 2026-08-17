@@ -17,6 +17,8 @@
   },
   "dependencies": {
     "@element-plus/icons-vue": "2.3.2",
+    "@form-create/designer": "^3.5.0",
+    "@form-create/element-ui": "^3.3.3",
     "@vueup/vue-quill": "1.2.0",
     "@vueuse/core": "14.1.0",
     "axios": "1.13.2",
@@ -28,6 +30,7 @@
     "js-beautify": "1.15.4",
     "js-cookie": "3.0.5",
     "jsencrypt": "3.3.2",
+    "monaco-editor": "^0.56.0",
     "nprogress": "0.2.0",
     "pinia": "3.0.4",
     "vue": "3.5.26",

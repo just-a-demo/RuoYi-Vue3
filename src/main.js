@@ -81,4 +81,12 @@ app.use(ElementPlus, {
   size: Cookies.get('size') || 'default'
 })
 
+
+import FcDesigner from '@form-create/designer';
+
+// 使用 Element Plus 和 FcDesigner
+app.use(FcDesigner);
+app.use(FcDesigner.formCreate);
+
+
 app.mount('#app')
