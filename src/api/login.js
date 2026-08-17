@@ -67,3 +67,14 @@ export function getCodeImg() {
     timeout: 20000
   })
 }
+
+
+// SSO 免密登录
+export function ssoLogin(data) {
+  return request({
+    url: '/business/usernameLogin',
+    method: 'post',
+    data: data,
+    headers: { isToken: false } // 登录接口不带旧 token
+  })
+}
