@@ -18,6 +18,13 @@ export default defineConfig(({ mode, command }) => {
       format: 'es'
     },
     plugins: createVitePlugins(env, command === 'build'),
+    optimizeDeps: {
+      exclude: ['@vue/repl']
+    }, worker: {
+      format: 'es'
+    }, build: {
+      target: 'es2022', chunkSizeWarningLimit: 7000
+    },
     resolve: {
       // https://cn.vitejs.dev/config/#resolve-alias
       alias: {

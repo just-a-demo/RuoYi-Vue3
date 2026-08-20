@@ -9,7 +9,8 @@
     "dev": "vite",
     "build:prod": "vite build",
     "build:stage": "vite build --mode staging",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "postinstall": "node scripts/prepare-local-repl.mjs"
   },
   "repository": {
     "type": "git",
@@ -36,7 +37,13 @@
     "vue": "3.5.26",
     "vue-cropper": "1.1.1",
     "vue-router": "4.6.4",
-    "vuedraggable": "4.1.0"
+    "vuedraggable": "4.1.0",
+    "@vue/compiler-sfc": "3.5.41",
+    "@vue/repl": "4.7.2",
+    "@vue/server-renderer": "3.5.41",
+    "es-module-shims": "2.8.4",
+    "prettier": "3.3.3",
+    "typescript": "5.9.2"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "5.2.4",
