@@ -100,6 +100,20 @@ export const constantRoutes = [
 // 动态路由，基于用户权限动态去加载
 export const dynamicRoutes = [
   {
+    path: '/vue-studio/editor',
+    component: Layout,
+    hidden: true,
+    permissions: ['vueStudio:component:edit'],
+    children: [
+      {
+        path: ':id(\\d+)',
+        component: () => import('@/views/vueStudio/component/editor.vue'),
+        name: 'VueStudioEditor',
+        meta: { title: '组件代码编辑', activeMenu: '/vue-studio/components', noCache: true }
+      }
+    ]
+  },
+  {
     path: '/system/user-auth',
     component: Layout,
     hidden: true,
