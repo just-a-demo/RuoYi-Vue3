@@ -1,20 +1,20 @@
 import { getCompletions } from '@/api/vueStudio/component'
-import { getScopeAtOffset, getSfcBlocks, virtualSource } from './useVueSfcModels'
+import { blockLanguage, getBlockAtOffset, getScopeAtOffset, virtualSource } from './useVueSfcModels'
 import { WorkerManager as CssWorkerManager } from 'monaco-editor/languages/features/css/workerManager.js'
 import { WorkerManager as HtmlWorkerManager } from 'monaco-editor/languages/features/html/workerManager.js'
 import { ElMessage } from 'element-plus'
 
 const builtins = {
   global: [
-    { label: 'vue-sfc', insertText: '<template>\n  $1\n</template>\n\n<script setup lang="ts">\n$2\n</script>\n\n<style scoped>\n$3\n</style>', documentation: 'Vue 3 单文件组件骨架' }
+    { label: 'vue-sfc', insertText: '<template>\n  $1\n</template>\n\n<script setup>\n$2\n</script>\n\n<style scoped>\n$3\n</style>', documentation: 'Vue 3 JavaScript 单文件组件骨架' }
   ],
   template: [
     { label: 'v-if', insertText: 'v-if="$1"', documentation: '条件渲染' },
     { label: 'v-for', insertText: 'v-for="($1, index) in $2" :key="index"', documentation: '列表渲染' }
   ],
   script: [
-    { label: 'defineProps', insertText: 'const props = defineProps<{\n  $1\n}>()', documentation: '声明组件 props' },
-    { label: 'defineEmits', insertText: 'const emit = defineEmits<{\n  $1\n}>()', documentation: '声明组件事件' },
+    { label: 'defineProps', insertText: 'const props = defineProps({\n  $1\n})', documentation: '声明组件 props' },
+    { label: 'defineEmits', insertText: "const emit = defineEmits(['$1'])", documentation: '声明组件事件' },
     { label: 'defineExpose', insertText: 'defineExpose({ $1 })', documentation: '暴露组件公开成员' }
   ],
   style: [{ label: 'display-flex', insertText: 'display: flex;\n$1', documentation: 'Flex 布局' }]
@@ -34,35 +34,42 @@ export function useVueCompletion(monaco, sourceModel, getTsWorker) {
   let disposed = false
   let refreshGeneration = 0
   const providers = []
-  const cssManager = new CssWorkerManager(monaco.css.cssDefaults)
+  const cssManagers = { css: new CssWorkerManager(monaco.css.cssDefaults), less: new CssWorkerManager(monaco.css.lessDefaults), scss: new CssWorkerManager(monaco.css.scssDefaults) }
   const htmlManager = new HtmlWorkerManager(monaco.html.htmlDefaults)
-  const cssModel = monaco.editor.createModel('', 'plaintext', monaco.Uri.parse(`inmemory://vue-studio/completion-${Date.now()}.css`))
-  const htmlModel = monaco.editor.createModel('', 'plaintext', monaco.Uri.parse(`inmemory://vue-studio/completion-${Date.now()}.html`))
+  const session = `${Date.now()}-${Math.random()}`
+  const styleModels = Object.fromEntries(['css', 'less', 'scss'].map(language => [language, monaco.editor.createModel('', 'plaintext', monaco.Uri.parse(`inmemory://vue-studio/completion-${session}.${language}`))]))
+  const htmlModel = monaco.editor.createModel('', 'plaintext', monaco.Uri.parse(`inmemory://vue-studio/completion-${session}.html`))
   let reportedFailure = false
   function report(error) {
     if (!disposed && !reportedFailure) { reportedFailure = true; ElMessage.warning('部分语言服务暂不可用：' + (error.message || String(error))) }
   }
-  async function scopedWorker(scope) {
-    const target = scope === 'style' ? cssModel : htmlModel
-    const value = virtualSource(sourceModel.getValue(), getSfcBlocks(sourceModel.getValue())[scope])
+  async function scopedWorker(scope, position) {
+    const block = getBlockAtOffset(sourceModel.getValue(), sourceModel.getOffsetAt(position))
+    const language = blockLanguage(block) === 'sass' ? 'scss' : blockLanguage(block)
+    const target = scope === 'style' ? styleModels[language] : htmlModel
+    const value = virtualSource(sourceModel.getValue(), block)
     if (target.getValue() !== value) target.setValue(value)
-    const service = await (scope === 'style' ? cssManager : htmlManager).getLanguageServiceWorker(target.uri)
+    const service = await (scope === 'style' ? cssManagers[language] : htmlManager).getLanguageServiceWorker(target.uri)
     return { service, target }
   }
   function fromRange(range) {
     return new monaco.Range(range.start.line + 1, range.start.character + 1, range.end.line + 1, range.end.character + 1)
   }
-  const mirror = monaco.editor.createModel('', 'plaintext', monaco.Uri.parse(`inmemory://vue-studio/completion-${Date.now()}-${Math.random()}.ts`))
+  const scriptModels = Object.fromEntries(['js', 'ts'].map(extension => [extension, monaco.editor.createModel('', 'plaintext', monaco.Uri.parse(`inmemory://vue-studio/completion-${session}.${extension}`))]))
+  let mirror = scriptModels.js
 
-  function syncMirror() {
-    const block = getSfcBlocks(sourceModel.getValue()).script
+  function syncMirror(position) {
+    const block = getBlockAtOffset(sourceModel.getValue(), sourceModel.getOffsetAt(position))
+    const language = blockLanguage(block)
+    mirror = language === 'typescript' ? scriptModels.ts : scriptModels.js
     const value = virtualSource(sourceModel.getValue(), block, true)
     if (mirror.getValue() !== value) mirror.setValue(value)
+    return language
   }
 
-  async function worker() {
-    syncMirror()
-    return getTsWorker(mirror.uri)
+  async function worker(position) {
+    const language = syncMirror(position)
+    return getTsWorker(mirror.uri, language)
   }
 
   function registerCompletion() {
@@ -73,7 +80,11 @@ export function useVueCompletion(monaco, sourceModel, getTsWorker) {
         if (model !== sourceModel || disposed) return { suggestions: [] }
         const version = model.getVersionId()
         const scope = getScopeAtOffset(model.getValue(), model.getOffsetAt(position))
-        const candidates = [...builtins.global, ...builtins[scope], ...itemsByScope.global, ...itemsByScope[scope]]
+        const isTs = blockLanguage(getBlockAtOffset(model.getValue(), model.getOffsetAt(position))) === 'typescript'
+        const snippets = builtins[scope].map(item => !isTs ? item : item.label === 'defineProps'
+          ? { ...item, insertText: 'const props = defineProps<{\n  $1\n}>()' }
+          : item.label === 'defineEmits' ? { ...item, insertText: 'const emit = defineEmits<{\n  $1\n}>()' } : item)
+        const candidates = [...builtins.global, ...snippets, ...itemsByScope.global, ...itemsByScope[scope]]
         const suggestions = [...new Map(candidates.map(item => [`${item.label}:${item.insertText}`, item])).values()].map((item, index) => ({
           label: item.label, kind: monaco.languages.CompletionItemKind.Snippet,
           insertText: item.insertText, insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
@@ -82,7 +93,7 @@ export function useVueCompletion(monaco, sourceModel, getTsWorker) {
         }))
         if (scope === 'script') {
           try {
-            const service = await worker()
+            const service = await worker(position)
             if (disposed || token.isCancellationRequested) return { suggestions: [] }
             const result = await service.getCompletionsAtPosition(mirror.uri.toString(), mirror.getOffsetAt(position), {})
             suggestions.push(...(result?.entries || []).map(entry => ({
@@ -90,13 +101,13 @@ export function useVueCompletion(monaco, sourceModel, getTsWorker) {
               kind: monaco.languages.CompletionItemKind[entry.kind === 'function' ? 'Function' : entry.kind === 'class' ? 'Class' : 'Variable'],
               insertText: entry.insertText || entry.name,
               sortText: entry.sortText,
-              detail: 'TypeScript language service',
+              detail: isTs ? 'TypeScript language service' : 'JavaScript language service',
               range: wordRange(model, position)
             })))
           } catch (error) { report(error) }
         } else if (scope === 'template' || scope === 'style') {
           try {
-            const { service, target } = await scopedWorker(scope)
+            const { service, target } = await scopedWorker(scope, position)
             const result = await service.doComplete(target.uri.toString(), { line: position.lineNumber - 1, character: position.column - 1 })
             suggestions.push(...(result?.items || []).map(item => ({
               label: item.label, kind: monaco.languages.CompletionItemKind.Property,
@@ -116,7 +127,7 @@ export function useVueCompletion(monaco, sourceModel, getTsWorker) {
     async provideHover(model, position) {
       if (model !== sourceModel || disposed || getScopeAtOffset(model.getValue(), model.getOffsetAt(position)) !== 'script') return null
       try {
-        const service = await worker()
+        const service = await worker(position)
         if (disposed) return null
         const info = await service.getQuickInfoAtPosition(mirror.uri.toString(), mirror.getOffsetAt(position))
         if (!info || disposed) return null
@@ -134,7 +145,7 @@ export function useVueCompletion(monaco, sourceModel, getTsWorker) {
     async provideSignatureHelp(model, position, token) {
       if (model !== sourceModel || disposed || getScopeAtOffset(model.getValue(), model.getOffsetAt(position)) !== 'script') return null
       try {
-        const service = await worker()
+        const service = await worker(position)
         if (disposed || token.isCancellationRequested) return null
         const info = await service.getSignatureHelpItems(mirror.uri.toString(), mirror.getOffsetAt(position), {})
         if (!info || disposed || token.isCancellationRequested) return null
@@ -153,7 +164,7 @@ export function useVueCompletion(monaco, sourceModel, getTsWorker) {
   async function locations(model, position, references) {
     if (model !== sourceModel || disposed || getScopeAtOffset(model.getValue(), model.getOffsetAt(position)) !== 'script') return []
     try {
-      const service = await worker()
+      const service = await worker(position)
       if (disposed) return []
       const values = await service[references ? 'getReferencesAtPosition' : 'getDefinitionAtPosition'](mirror.uri.toString(), mirror.getOffsetAt(position))
       if (disposed) return []
@@ -182,10 +193,10 @@ export function useVueCompletion(monaco, sourceModel, getTsWorker) {
       refreshGeneration += 1
       completionProvider?.dispose()
       providers.splice(0).forEach(item => item.dispose())
-      mirror.dispose()
-      cssModel.dispose()
+      Object.values(scriptModels).forEach(model => model.dispose())
+      Object.values(styleModels).forEach(model => model.dispose())
       htmlModel.dispose()
-      cssManager.dispose()
+      Object.values(cssManagers).forEach(manager => manager.dispose())
       htmlManager.dispose()
     }
   }

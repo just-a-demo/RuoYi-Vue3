@@ -6,11 +6,11 @@
       <el-select v-model="item.type">
         <el-option v-for="type in types" :key="type" :label="type" :value="type" />
       </el-select>
-      <el-input v-model="item.value" placeholder="Value" />
+      <el-input v-model="item.value" placeholder="Value" @update:model-value="item.enabled = true" />
       <el-button icon="Delete" circle @click="remove(index)" />
     </div>
     <el-button icon="Plus" @click="add">添加参数</el-button>
-    <span class="hint">可从 defineProps 提取建议；修改参数不会自动运行。</span>
+    <span class="hint">填写值会启用该参数；取消勾选使用组件默认值。</span>
   </div>
 </template>
 

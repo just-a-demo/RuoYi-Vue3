@@ -1,0 +1,11 @@
+import request from '@/utils/request'
+export const listModels = params => request({ url: '/magic/web/requirements/business/formModel/list', params })
+export const getModel = id => request({ url: `/magic/web/requirements/business/formModel/${id}` })
+export const saveModel = data => request({ url: '/magic/web/requirements/business/formModel', method: data.id ? 'put' : 'post', data, timeout: 120000 })
+export const deleteModel = id => request({ url: `/magic/web/requirements/business/formModel/${id}`, method: 'delete' })
+export const getApproval = code => request({ url: `/magic/web/requirements/business/formModel/approval/${encodeURIComponent(code)}` })
+
+export const publishModel = id => request({ url: `/magic/web/requirements/business/formModel/${id}/publish`, method: 'post', timeout: 120000 })
+export const getPublishedModel = id => request({ url: `/magic/web/requirements/business/formModel/runtime/${id}` })
+export const getModelRecords = id => request({ url: `/magic/web/requirements/business/formModel/runtime/${id}/records` })
+export const saveModelRecord = (id, recordId, data) => request({ url: `/magic/web/requirements/business/formModel/runtime/${id}/records${recordId ? '/' + recordId : ''}`, method: recordId ? 'put' : 'post', data })

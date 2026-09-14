@@ -1,5 +1,7 @@
 <template>
-  <div ref="containerRef" class="monaco-sfc-editor" />
+  <div class="monaco-sfc-editor">
+    <div ref="containerRef" class="sfc-editor-surface" />
+  </div>
 </template>
 
 <script setup>
@@ -74,6 +76,12 @@ onMounted(() => {
     strict: true,
     noEmit: true
   })
+  monaco.typescript.javascriptDefaults.setCompilerOptions({
+    target: monaco.typescript.ScriptTarget.ESNext,
+    module: monaco.typescript.ModuleKind.ESNext,
+    moduleResolution: monaco.typescript.ModuleResolutionKind.NodeJs,
+    allowNonTsExtensions: true, allowJs: true, checkJs: false, noEmit: true
+  })
   disposables.push(registerVueTypes(monaco))
   model = monaco.editor.createModel(props.modelValue, 'vue', monaco.Uri.parse(`inmemory://vue-studio/${props.componentKey}.vue`))
   model.setEOL(monaco.editor.EndOfLineSequence.LF)
@@ -105,8 +113,9 @@ onMounted(() => {
     padding: { top: 10, bottom: 10 }
   })
   const tsManager = new TypeScriptWorkerManager('typescript', monaco.typescript.typescriptDefaults)
-  disposables.push(tsManager)
-  const getTsWorker = uri => tsManager.getLanguageServiceWorker(uri)
+  const jsManager = new TypeScriptWorkerManager('javascript', monaco.typescript.javascriptDefaults)
+  disposables.push(tsManager, jsManager)
+  const getTsWorker = (uri, language = 'typescript') => (language === 'javascript' ? jsManager : tsManager).getLanguageServiceWorker(uri)
   diagnostics = useDiagnostics(monaco, model, props.componentKey, markers => emit('diagnostics', markers), getTsWorker)
   completion = useVueCompletion(monaco, model, getTsWorker)
   disposables.push(registerSfcFormatter(monaco, error => ElMessage.error(`格式化失败，源码未修改：${error.message}`)))
@@ -168,5 +177,6 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.monaco-sfc-editor { width: 100%; height: 100%; min-width: 0; min-height: 0; overflow: hidden; }
+.monaco-sfc-editor { display: flex; flex-direction: column; width: 100%; height: 100%; min-width: 0; min-height: 0; overflow: hidden; }
+.sfc-editor-surface { flex: 1; min-height: 0; overflow: hidden; }
 </style>

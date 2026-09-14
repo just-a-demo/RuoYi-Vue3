@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv } from 'vite'
 import path from 'path'
 import createVitePlugins from './vite/plugins'
+import studioRuntime from './vite/plugins/studio-runtime'
 
 const baseUrl = 'http://localhost:8080' // 后端接口
 
@@ -17,7 +18,7 @@ export default defineConfig(({ mode, command }) => {
     worker: {
       format: 'es'
     },
-    plugins: createVitePlugins(env, command === 'build'),
+    plugins: [...createVitePlugins(env, command === 'build'), studioRuntime()],
     resolve: {
       // https://cn.vitejs.dev/config/#resolve-alias
       alias: {

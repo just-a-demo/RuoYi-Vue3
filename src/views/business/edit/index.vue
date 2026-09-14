@@ -2,7 +2,7 @@
   <div class="app-container">
     <el-result icon="warning" title="旧 REPL 编辑器已停用" sub-title="请从独立的“Vue 组件工作室”进入 Monaco 编辑器。">
       <template #extra>
-        <el-button type="primary" @click="$router.push('/vue-studio/components')">前往 Vue 组件工作室</el-button>
+        <el-button type="primary" @click="$router.push('/dev/edit')">前往 Vue 组件工作室</el-button>
       </template>
     </el-result>
   </div>

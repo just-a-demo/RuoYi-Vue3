@@ -1,12 +1,17 @@
 import { compileTemplate, parse } from '@vue/compiler-sfc/dist/compiler-sfc.esm-browser.js'
 import { WorkerManager as CssWorkerManager } from 'monaco-editor/languages/features/css/workerManager.js'
 import { createVirtualModels } from './useVueSfcModels.js'
+import { preprocessStyle } from '@/views/vueStudio/component/previewCompiler'
 
 const OWNER = 'vue-studio-sfc'
 
 export function useDiagnostics(monaco, sourceModel, componentKey, onResult, getTsWorker) {
   const virtual = createVirtualModels(monaco, componentKey)
-  const cssManager = new CssWorkerManager(monaco.css.cssDefaults)
+  const cssManagers = {
+    css: new CssWorkerManager(monaco.css.cssDefaults),
+    less: new CssWorkerManager(monaco.css.lessDefaults),
+    scss: new CssWorkerManager(monaco.css.scssDefaults)
+  }
   let generation = 0
   let timer
   let disposed = false
@@ -35,12 +40,11 @@ export function useDiagnostics(monaco, sourceModel, componentKey, onResult, getT
         markers.push(marker(error.message || String(error), undefined, 'vue-template', error.code || 'compile', { line: start.lineNumber, column: start.column }, { line: end.lineNumber, column: end.column }))
       }
     }
-    if (descriptor.script && !descriptor.scriptSetup) markers.push(marker('建议使用 <script setup lang="ts">', monaco.MarkerSeverity.Warning, 'vue-sfc', 'prefer-script-setup', descriptor.script.loc.start))
-    const { models } = virtual.update(source)
-    const tsModel = models.get('script')
+    const { entries } = virtual.update(source)
     try {
-      if (tsModel.getValue().trim()) {
-        const service = await getTsWorker(tsModel.uri)
+      for (const { model: tsModel, language, block } of entries.filter(entry => entry.block.name === 'script')) {
+        if (!block.content.trim()) continue
+        const service = await getTsWorker(tsModel.uri, language)
         if (stale()) return
         const results = await Promise.all([service.getSyntacticDiagnostics(tsModel.uri.toString()), service.getSemanticDiagnostics(tsModel.uri.toString())])
         if (stale()) return
@@ -48,15 +52,25 @@ export function useDiagnostics(monaco, sourceModel, componentKey, onResult, getT
         for (const error of results.flat()) {
           const start = tsModel.getPositionAt(error.start || 0)
           const end = tsModel.getPositionAt((error.start || 0) + Math.max(1, error.length || 1))
-          markers.push(marker(flatten(error.messageText), error.category === 0 ? monaco.MarkerSeverity.Warning : monaco.MarkerSeverity.Error, 'typescript', error.code, { line: start.lineNumber, column: start.column }, { line: end.lineNumber, column: end.column }))
+          markers.push(marker(flatten(error.messageText), error.category === 0 ? monaco.MarkerSeverity.Warning : monaco.MarkerSeverity.Error, language, error.code, { line: start.lineNumber, column: start.column }, { line: end.lineNumber, column: end.column }))
         }
       }
-      const style = models.get('style')
-      if (style.getValue().trim()) {
-        const worker = await cssManager.getLanguageServiceWorker(style.uri)
+      for (const { model: style, language, block } of entries.filter(entry => entry.block.name === 'style')) {
+        if (!block.content.trim()) continue
+        if (language === 'sass') {
+          try { await preprocessStyle(block.content, 'sass') }
+          catch (error) {
+            const line = block.startLine + (error.span?.start?.line || 0)
+            const column = (error.span?.start?.column || 0) + 1
+            markers.push(marker(error.message || String(error), undefined, 'sass', 'compile', { line, column }))
+          }
+          if (stale()) return
+          continue
+        }
+        const worker = await cssManagers[language].getLanguageServiceWorker(style.uri)
         const diagnostics = await worker.doValidation(style.uri.toString())
         if (stale()) return
-        for (const item of diagnostics) markers.push(marker(item.message, item.severity === 1 ? monaco.MarkerSeverity.Error : monaco.MarkerSeverity.Warning, 'css', item.code || 'validation',
+        for (const item of diagnostics) markers.push(marker(item.message, item.severity === 1 ? monaco.MarkerSeverity.Error : monaco.MarkerSeverity.Warning, language, item.code || 'validation',
           { line: item.range.start.line + 1, column: item.range.start.character + 1 },
           { line: item.range.end.line + 1, column: item.range.end.character + 1 }))
       }
@@ -80,7 +94,7 @@ export function useDiagnostics(monaco, sourceModel, componentKey, onResult, getT
     generation += 1
     clearTimeout(timer)
     monaco.editor.setModelMarkers(sourceModel, OWNER, [])
-    cssManager.dispose()
+    Object.values(cssManagers).forEach(manager => manager.dispose())
     virtual.dispose()
   } }
 }
