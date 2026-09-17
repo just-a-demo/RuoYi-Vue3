@@ -10,11 +10,13 @@
 
     <el-row :gutter="10" class="mb8">
       <el-col :span="1.5"><el-button type="primary" plain icon="Plus" v-hasPermi="['vueStudio:component:add']" @click="openAdd">新增</el-button></el-col>
-      <el-col :span="1.5"><el-button type="warning" plain icon="Download" v-hasPermi="['vueStudio:component:export']" @click="handleExport">导出</el-button></el-col>
+      <ComponentTransfer :selected="selectedRows" @imported="loadList" />
+      <el-col :span="1.5"><el-button type="warning" plain icon="Download" v-hasPermi="['vueStudio:component:export']" @click="handleExport">导出列表（Excel）</el-button></el-col>
       <right-toolbar :search="false" @queryTable="loadList" />
     </el-row>
 
-    <el-table v-loading="loading" :data="rows">
+    <el-table v-loading="loading" :data="rows" row-key="id" @selection-change="selectedRows = $event">
+      <el-table-column type="selection" width="50" />
       <el-table-column label="组件名称" prop="componentName" min-width="150" show-overflow-tooltip />
       <el-table-column label="组件标识" prop="componentKey" min-width="150" show-overflow-tooltip />
       <el-table-column label="说明" prop="description" min-width="180" show-overflow-tooltip />
@@ -59,11 +61,12 @@
 </template>
 
 <script setup name="VueStudioComponent">
-import { getCurrentInstance, nextTick, reactive, ref, toRefs, shallowRef } from 'vue'
+import { getCurrentInstance, nextTick, onActivated, reactive, ref, toRefs, shallowRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { addComponent, deleteComponents, getComponent, listComponents, updateComponent } from '@/api/vueStudio/component'
 import { createComponentSource, normalizePublishTargets } from './templates'
 import ReleaseHistory from './ReleaseHistory.vue'
+import ComponentTransfer from './ComponentTransfer.vue'
 
 const PreviewDialog = shallowRef()
 const { proxy } = getCurrentInstance()
@@ -73,6 +76,7 @@ const { sys_normal_disable } = proxy.useDict('sys_normal_disable')
 const loading = ref(false)
 const submitting = ref(false)
 const rows = ref([])
+const selectedRows = ref([])
 const total = ref(0)
 const dateRange = ref([])
 const metaVisible = ref(false)
@@ -95,6 +99,7 @@ const data = reactive({
 const { queryParams, form, rules } = toRefs(data)
 
 async function loadList() {
+  selectedRows.value = []
   loading.value = true
   try {
     const response = await listComponents(proxy.addDateRange(queryParams.value, dateRange.value))
@@ -167,5 +172,11 @@ function handleQuery() { queryParams.value.pageNum = 1; loadList() }
 function resetQuery() { dateRange.value = []; proxy.resetForm('queryRef'); handleQuery() }
 function handleExport() { proxy.download('/magic/web/requirements/vueStudio/component/export', proxy.addDateRange({ ...queryParams.value }, dateRange.value), `vue_components_${Date.now()}.xlsx`) }
 
+// KeepAlive 首次激活已有初始查询，再次返回列表时刷新，保留筛选与分页。
+let hasActivated = false
+onActivated(() => {
+  if (hasActivated) loadList()
+  hasActivated = true
+})
 loadList()
 </script>

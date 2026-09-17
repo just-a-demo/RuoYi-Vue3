@@ -38,3 +38,9 @@ export const getComponentVersion = (id, releaseId) => request({ url: `/magic/web
 export const compileComponentImports = sourceCode => request({ url: '/magic/web/requirements/vueStudio/component/imports', method: 'post', data: { sourceCode }, timeout: 120000 })
 export const getPublishedComponent = (key, target = 'vue') => request({ url: `/magic/web/requirements/vueStudio/component/runtime/${encodeURIComponent(key)}`, params: { target } })
 export const getComponentCatalog = (target = 'formCreate') => request({ url: '/magic/web/requirements/vueStudio/component/catalog', params: { target } })
+
+// Do not put large source packages in the repeat-submit sessionStorage cache.
+const packageRequest = (action, data) => request({ url: `/magic/web/requirements/vueStudio/component/package/${action}`, method: 'post', data, timeout: 120000, headers: { repeatSubmit: false } })
+export const exportComponentPackage = ids => packageRequest('export', { ids })
+export const previewComponentPackage = componentPackage => packageRequest('preview', { package: componentPackage })
+export const importComponentPackage = (componentPackage, choices) => packageRequest('import', { package: componentPackage, choices })

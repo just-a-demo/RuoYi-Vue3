@@ -109,7 +109,7 @@ export const dynamicRoutes = [
         path: ':id(\\d+)',
         component: () => import('@/views/vueStudio/component/editor.vue'),
         name: 'VueStudioEditor',
-        meta: { title: '组件代码编辑', activeMenu: '/dev/edit', noCache: true }
+        meta: { title: '组件代码编辑', activeMenu: '/dev/edit', keepMounted: true }
       }
     ]
   },

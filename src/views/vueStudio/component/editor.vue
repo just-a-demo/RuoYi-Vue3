@@ -7,6 +7,10 @@
         <el-tag size="small">草稿 {{ component.versionNo || 1 }}</el-tag>
         <span :class="dirty ? 'dirty' : 'saved'">{{ saving ? '保存中…' : dirty ? '● 未保存' : '已保存' }}</span>
       </div>
+      <div class="bar-center">
+        <el-radio-group v-model="activeTab" @change="captureDesign"><el-radio-button value="code">代码编写</el-radio-button><el-radio-button value="design">表单设计</el-radio-button></el-radio-group>
+        <el-checkbox-group class="publish-targets" v-model="component.publishTargets" :disabled="readOnly || !initialized"><el-checkbox value="formCreate">FormCreate 自定义组件</el-checkbox></el-checkbox-group>
+      </div>
       <div class="bar-right">
         <el-button text icon="Warning" @click="problemsOpen = !problemsOpen">问题 {{ problems.length }}</el-button>
         <el-button icon="VideoPlay" :disabled="!initialized" v-hasPermi="['vueStudio:component:preview']" @click="preview">开始预览</el-button>
@@ -30,11 +34,6 @@
       </div>
     </header>
 
-    <div class="workspace-tabs">
-      <el-radio-group v-model="activeTab" @change="captureDesign"><el-radio-button value="code">代码编写</el-radio-button><el-radio-button value="design">表单设计</el-radio-button></el-radio-group>
-      <el-checkbox-group v-model="component.publishTargets" :disabled="readOnly || !initialized"><el-checkbox value="formCreate">FormCreate 自定义组件</el-checkbox></el-checkbox-group>
-    </div>
-
     <main class="editor-workspace" :class="{ 'with-problems': problemsOpen }">
       <MonacoSfcEditor v-if="loaded" v-show="activeTab === 'code'"
         ref="editorRef" v-model="source" :component-key="route.params.id" :theme="theme" :font-size="fontSize"
@@ -57,6 +56,7 @@
 <script setup name="VueStudioEditor">
 import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
+import { isRetainedTabNavigation } from '@/utils/tabNavigation'
 import { getComponent, updateComponent, publishComponent } from '@/api/vueStudio/component'
 import MonacoSfcEditor from '@/components/MonacoSfcEditor/index.vue'
 import ProblemPanel from '@/components/MonacoSfcEditor/ProblemPanel.vue'
@@ -219,7 +219,7 @@ async function toggleFullscreen() {
 }
 function fullscreenChange() { isFullscreen.value = Boolean(document.fullscreenElement) }
 
-onBeforeRouteLeave(async (_to, _from, next) => next(await confirmLeave()))
+onBeforeRouteLeave((to, from) => isRetainedTabNavigation(to, from, route) || confirmLeave())
 onMounted(() => {
   window.addEventListener('beforeunload', beforeUnload)
   document.addEventListener('fullscreenchange', fullscreenChange)
@@ -232,12 +232,13 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.studio-editor { position: relative; width: 100%; min-width: 0; height: calc(100dvh - var(--layout-height, 84px)); min-height: 300px; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) 24px; background: #1e1e1e; color: #ddd; }
+.studio-editor { position: relative; width: 100%; min-width: 0; height: calc(100dvh - var(--layout-height, 84px)); min-height: 300px; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) 24px; background: #1e1e1e; color: #ddd; }
 .studio-editor:fullscreen { height: 100vh; }
 .editor-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; min-height: 50px; padding: 8px 10px; background: #181818; border-bottom: 1px solid #333; }
-.bar-left, .bar-right { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.bar-left, .bar-center, .bar-right { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.bar-center { flex: 1 1 380px; justify-content: center; gap: 16px; }
 .bar-left strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.workspace-tabs { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; padding: 8px 12px; background: var(--el-bg-color); color: var(--el-text-color-primary); }
+.publish-targets { --el-checkbox-text-color: #ddd; }
 .dirty { color: #e6a23c; } .saved { color: #67c23a; }
 .editor-workspace { min-width: 0; min-height: 0; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
 .editor-workspace.with-problems { grid-template-rows: minmax(0, 1fr) auto; }

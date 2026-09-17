@@ -75,19 +75,20 @@ const useUserStore = defineStore(
           })
         })
       },
-      // 退出系统
+      // 会话失效时只清理本地状态，不再请求需要身份的接口
+      resetToken() {
+        this.token = ''
+        this.roles = []
+        this.permissions = []
+        this.id = ''
+        this.name = ''
+        this.nickName = ''
+        this.avatar = ''
+        removeToken()
+      },
+      // 退出系统，即使接口失败也清理本地登录信息
       logOut() {
-        return new Promise((resolve, reject) => {
-          logout(this.token).then(() => {
-            this.token = ''
-            this.roles = []
-            this.permissions = []
-            removeToken()
-            resolve()
-          }).catch(error => {
-            reject(error)
-          })
-        })
+        return logout(this.token).finally(() => this.resetToken())
       }
     }
   })

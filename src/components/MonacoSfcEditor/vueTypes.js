@@ -7,7 +7,7 @@ import formCore from '@form-create/core/types/index.d.ts?raw'
 import formCreate from '@form-create/element-ui/types/index.d.ts?raw'
 import formConfig from '@form-create/element-ui/types/config.d.ts?raw'
 import formMaker from '@form-create/element-ui/types/maker.d.ts?raw'
-const routerTypes = import.meta.glob('/node_modules/vue-router/dist/*.d.mts', { query: '?raw', import: 'default', eager: true })
+const routerTypes = import.meta.glob('../../../node_modules/vue-router/dist/*.d.mts', { query: '?raw', import: 'default', eager: true })
 
 // Use the installed Vue declarations, not approximate stub APIs.
 export function registerVueTypes(monaco) {

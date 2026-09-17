@@ -55,9 +55,10 @@ router.beforeEach(async (to, from) => {
         // 重新导航到目标路由，确保动态路由已注册
         return { ...to, replace: true }
       } catch (err) {
-        await useUserStore().logOut()
+        useUserStore().resetToken()
+        isRelogin.show = false
         ElMessage.error(err)
-        return { path: '/' }
+        return { path: '/login', query: { redirect: to.fullPath }, replace: true }
       }
     }
     return true
@@ -68,7 +69,7 @@ router.beforeEach(async (to, from) => {
       return true
     }
     NProgress.done()
-    return `/login?redirect=${to.fullPath}` // 否则全部重定向到登录页
+    return { path: '/login', query: { redirect: to.fullPath } } // 否则全部重定向到登录页
   }
 })
 

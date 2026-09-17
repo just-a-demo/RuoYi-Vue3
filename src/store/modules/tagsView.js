@@ -1,5 +1,6 @@
 import cache from '@/plugins/cache'
 import useSettingsStore from '@/store/modules/settings'
+import { tabCacheKey } from '@/utils/tabCache'
 
 const PERSIST_KEY = 'tags-view-visited'
 
@@ -60,9 +61,9 @@ const useTagsViewStore = defineStore(
         )
       },
       addCachedView(view) {
-        if (this.cachedViews.includes(view.name)) return
+        if (this.cachedViews.includes(tabCacheKey(view))) return
         if (!view.meta.noCache) {
-          this.cachedViews.push(view.name)
+          this.cachedViews.push(tabCacheKey(view))
         }
       },
       delView(view) {
@@ -96,7 +97,7 @@ const useTagsViewStore = defineStore(
       },
       delCachedView(view) {
         return new Promise(resolve => {
-          const index = this.cachedViews.indexOf(view.name)
+          const index = this.cachedViews.indexOf(tabCacheKey(view))
           index > -1 && this.cachedViews.splice(index, 1)
           resolve([...this.cachedViews])
         })
@@ -123,7 +124,7 @@ const useTagsViewStore = defineStore(
       },
       delOthersCachedViews(view) {
         return new Promise(resolve => {
-          const index = this.cachedViews.indexOf(view.name)
+          const index = this.cachedViews.indexOf(tabCacheKey(view))
           if (index > -1) {
             this.cachedViews = this.cachedViews.slice(index, index + 1)
           } else {
@@ -175,7 +176,7 @@ const useTagsViewStore = defineStore(
             if (idx <= index || (item.meta && item.meta.affix)) {
               return true
             }
-            const i = this.cachedViews.indexOf(item.name)
+            const i = this.cachedViews.indexOf(tabCacheKey(item))
             if (i > -1) {
               this.cachedViews.splice(i, 1)
             }
@@ -199,7 +200,7 @@ const useTagsViewStore = defineStore(
             if (idx >= index || (item.meta && item.meta.affix)) {
               return true
             }
-            const i = this.cachedViews.indexOf(item.name)
+            const i = this.cachedViews.indexOf(tabCacheKey(item))
             if (i > -1) {
               this.cachedViews.splice(i, 1)
             }

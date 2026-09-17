@@ -1,4 +1,4 @@
-import { build } from 'vite'
+import { build, normalizePath } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import autoImport from 'unplugin-auto-import/vite'
 import path from 'node:path'
@@ -15,7 +15,7 @@ export async function bundleStudioImports(names) {
       if (!resolved.startsWith(root)) throw new Error('组件导入必须位于当前前端项目中：' + name)
     }
   }
-  const entry = path.join(root, 'studio-imports-entry.js').replace(/\\/g, '/')
+  const entry = normalizePath(path.join(root, 'studio-imports-entry.js'))
   const imports = names.map((name, index) => `import * as m${index} from ${JSON.stringify(name)};`).join('\n')
   const registry = names.map((name, index) => `${JSON.stringify(name)}: m${index}`).join(',')
   const result = await build({
@@ -23,9 +23,9 @@ export async function bundleStudioImports(names) {
     resolve: { alias: { '@': path.join(root, 'src'), '~': root }, extensions: ['.mjs', '.js', '.ts', '.jsx', '.tsx', '.json', '.vue'] },
     plugins: [
       { name: 'studio-import-entry', resolveId(id, importer) {
-        if (id === entry) return entry
-        if (importer === entry && id.startsWith('.')) return this.resolve(path.resolve(root, 'src', id))
-      }, load(id) { if (id === entry) return `${imports}\nexport default {${registry}}` } },
+        if (normalizePath(id) === entry) return entry
+        if (importer && normalizePath(importer) === entry && id.startsWith('.')) return this.resolve(path.resolve(root, 'src', id))
+      }, load(id) { if (normalizePath(id) === entry) return `${imports}\nexport default {${registry}}` } },
       vue(), autoImport({ imports: ['vue', 'vue-router', 'pinia'], dts: false })
     ],
     define: { 'process.env.NODE_ENV': '"production"' },

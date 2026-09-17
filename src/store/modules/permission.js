@@ -70,6 +70,9 @@ function filterAsyncRouter(asyncRouterMap, lastRouter = false, type = false) {
       } else if (route.component === 'InnerLink') {
         route.component = InnerLink
       } else {
+        if (['tool/magic/index', 'business/formModel/index', 'business/formModel/runtime'].includes(route.component)) {
+          route.meta = { ...route.meta, keepMounted: true, noCache: false }
+        }
         route.component = loadView(route.component)
       }
     }
