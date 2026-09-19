@@ -52,14 +52,7 @@
           </el-table>
         </el-tab-pane>
         <el-tab-pane label="列表设计" name="list">
-          <el-table :data="fields"><el-table-column label="字段名称" prop="title" /><el-table-column label="字段标识" prop="field" />
-            <el-table-column label="显示"><template #default="{ row }"><el-checkbox v-model="row.visible" /></template></el-table-column>
-            <el-table-column label="顺序" width="170"><template #default="{ row }"><el-input-number v-model="row.order" :min="1" :max="9999" /></template></el-table-column>
-            <el-table-column label="允许排序"><template #default="{ row }"><el-checkbox v-model="row.sortable" /></template></el-table-column>
-            <el-table-column label="作为筛选"><template #default="{ row }"><el-checkbox v-model="row.filter" /></template></el-table-column>
-          </el-table>
-          <el-divider>列表效果</el-divider>
-          <ModelTable v-if="tab === 'list'" :fields="fields" />
+          <ListDesigner v-if="tab === 'list'" :fields="fields" :config="listConfig" />
         </el-tab-pane>
       </el-tabs>
     </div>
@@ -74,7 +67,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { listModels, getModel, saveModel, deleteModel, getApproval, publishModel } from '@/api/business/formModel'
 import { listFeishuCatalog } from '@/api/business/feishuConfig'
 import { syncFields } from './fields'
-import ModelTable from './ModelTable.vue'
+import ListDesigner from './ListDesigner.vue'
+import { normalizeListConfig, validateListConfig } from './listConfig'
 import MonacoSfcEditor from '@/components/MonacoSfcEditor/index.vue'
 import StudioDesigner from '@/components/StudioDesigner/index.vue'
 import { createComponentSource } from '@/views/vueStudio/component/templates'
@@ -83,6 +77,7 @@ import usePermissionStore from '@/store/modules/permission'
 import router from '@/router'
 const rows = ref([]), total = ref(0), loading = ref(false), saving = ref(false), editing = ref(false), tab = ref('basic')
 const query = reactive({ pageNum: 1, pageSize: 10, modelName: '', modelKey: '', status: '' })
+const listConfig = ref(normalizeListConfig())
 const model = ref({}), fields = ref([]), designer = ref(), approval = ref(null), approvalInput = ref(''), approvalLoading = ref(false), feishuApps = ref([])
 const publishing = ref(false), codePreview = ref()
 const initialized = ref(false), initializing = ref(false)
@@ -101,7 +96,7 @@ function syncRouteInfo() {
   model.value.pageTitle = modelName
 }
 function snapshot() {
-  return JSON.stringify({ ...model.value, fieldConfig: JSON.stringify(fields.value) })
+  return JSON.stringify({ ...model.value, fieldConfig: JSON.stringify(fields.value), listConfig: JSON.stringify(listConfig.value) })
 }
 async function capture() {
   syncRouteInfo()
@@ -110,6 +105,7 @@ async function capture() {
   }
   fields.value = syncFields(JSON.parse(model.value.formRules || '[]'), fields.value)
   model.value.fieldConfig = JSON.stringify(fields.value)
+  model.value.listConfig = JSON.stringify(listConfig.value)
   return snapshot()
 }
 async function edit(row) {
@@ -121,6 +117,7 @@ async function edit(row) {
   const data = row ? (await getModel(row.id)).data : { modelName: '', modelKey: '', description: '', status: '0', routePath: '', routeName: '', pageTitle: '', approvalCode: '', feishuAppId: null, formRules: '[]', formOptions: '{}', modelCode: createComponentSource('form', true), codeMode: 'integrated', fieldConfig: '[]' }
   model.value = { ...data, codeMode: data.codeMode || 'integrated', formRules: data.formRules || '[]', formOptions: data.formOptions || '{}' }
   fields.value = syncFields(JSON.parse(model.value.formRules), JSON.parse(data.fieldConfig || '[]'))
+  listConfig.value = normalizeListConfig(data.listConfig, fields.value)
   approval.value = null; approvalInput.value = data.approvalCode || ''; tab.value = 'basic'; editing.value = true
   await nextTick()
   await designer.value.setValue({ formRules: model.value.formRules, formOptions: model.value.formOptions })
@@ -136,12 +133,13 @@ async function save() {
   saving.value = true
   try {
     await capture()
+    validateListConfig(listConfig.value, fields.value)
     const saved = JSON.parse(JSON.stringify(model.value))
     const result = await saveModel(saved)
     if (!saved.id) { model.value.id = result.data; saved.id = result.data }
     baseline = JSON.stringify(saved)
     ElMessage.success('模型已保存')
-  } finally { saving.value = false }
+  } catch (error) { ElMessage.error(error.message || '保存失败') } finally { saving.value = false }
 }
 async function getFormConfig() {
   await capture()

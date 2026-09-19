@@ -6,6 +6,7 @@ import * as ElementExports from 'element-plus'
 import locale from 'element-plus/es/locale/lang/zh-cn'
 import 'element-plus/dist/index.css'
 import FcDesigner from '@form-create/designer'
+import { TOOLBAR_TYPE, normalizeToolbarRules, toolbarDesignerRule } from './formToolbar'
 
 const formCreate = FcDesigner.formCreate
 const { h, ref, reactive, provide, watch, nextTick } = Vue
@@ -36,12 +37,39 @@ for (const level of ['log', 'info', 'warn', 'error']) {
 addEventListener('error', event => send('studio:error', { message: event.message }))
 addEventListener('unhandledrejection', event => send('studio:error', { message: event.reason?.message || String(event.reason) }))
 
-function createForm(config = {}, values = {}) {
-  return {
-    rules: ref(formCreate.parseJson(config.formRules || '[]')),
+let submitSequence = 0
+const submitRequests = new Map()
+function submitToHost() {
+  const requestId = ++submitSequence
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { submitRequests.delete(requestId); reject(new Error('提交响应超时，请确认保存结果后再试')) }, 120000)
+    submitRequests.set(requestId, { resolve, reject, timer })
+    send('studio:submit', { requestId })
+  })
+}
+function createForm(config = {}, values = {}, hostSubmit = false) {
+  const rawRules = formCreate.parseJson(config.formRules || '[]')
+  const rules = normalizeToolbarRules(rawRules)
+  const data = plain(values || {})
+  for (const rule of rawRules) if (rule?.type === TOOLBAR_TYPE && rule.field) delete data[rule.field]
+  const form = {
+    rules: ref(rules.filter(rule => rule?.type !== TOOLBAR_TYPE)),
+    toolbarRules: rules.filter(rule => rule?.type === TOOLBAR_TYPE),
     options: ref(formCreate.parseJson(config.formOptions || '{}')),
-    formData: ref(plain(values || {})), formApi: ref()
+    formData: ref(data), formApi: ref(), mode: ref('view')
   }
+  let submission
+  form.submit = () => {
+    if (submission) return submission
+    submission = (async () => {
+      if (!form.formApi.value) throw new Error('表单尚未准备完成')
+      const values = await form.formApi.value.submit()
+      const result = hostSubmit ? await submitToHost() : { preview: true }
+      return { ...result, values }
+    })().finally(() => { submission = null })
+    return submission
+  }
+  return form
 }
 function renderForm(form) {
   return h(formCreate, {
@@ -53,7 +81,13 @@ function renderForm(form) {
 function renderContent(component, values, slots, item, form) {
   const content = h(component, values, slots)
   const showDesign = !item.hasFormOutlet && item.codeMode === 'legacy'
-  return showDesign ? h('div', [content, renderForm(form)]) : content
+  const body = showDesign ? h('div', [content, renderForm(form)]) : content
+  if (!form.toolbarRules.length) return body
+  const toolbars = form.toolbarRules.filter(rule => !rule.hidden && rule.display !== false).map((rule, index) => {
+    const events = Object.fromEntries(Object.entries(rule.on || {}).map(([name, handler]) => ['on' + name[0].toUpperCase() + name.slice(1), handler]))
+    return h(Vue.resolveComponent(TOOLBAR_TYPE), { ...rule.props, ...events, key: rule.name || index })
+  })
+  return h('div', { class: 'studio-form-layout' }, [...toolbars, body])
 }
 function evaluate(item, modules, ownForm = true) {
   const imports = item.moduleBundle ? new Function('__studioVue', '__studioRouter', '__studioElement', '__studioFormCreate', '__studioPinia', item.moduleBundle.code + '\nreturn StudioImports.default || StudioImports;')(Vue, VueRouter, ElementExports, formCreate, Pinia) : {}
@@ -115,10 +149,13 @@ function propertyRules(schema) {
 }
 function captureDesign() {
   if (!designer.value) throw new Error('设计器尚未准备完成')
-  return { formRules: designer.value.getJson(), formOptions: designer.value.getOptionsJson() }
+  const raw = designer.value.getJson()
+  const normalized = formCreate.toJson(normalizeToolbarRules(formCreate.parseJson(raw)))
+  if (normalized !== formCreate.toJson(formCreate.parseJson(raw))) designer.value.setRule(formCreate.parseJson(normalized))
+  return { formRules: normalized, formOptions: designer.value.getOptionsJson() }
 }
 async function setDesign(value) {
-  designer.value.setRule(formCreate.parseJson(value.formRules || '[]'))
+  designer.value.setRule(normalizeToolbarRules(formCreate.parseJson(value.formRules || '[]')))
   designer.value.setOption(formCreate.parseJson(value.formOptions || '{}'))
   await nextTick()
   lastDesign = JSON.stringify(captureDesign())
@@ -131,7 +168,7 @@ async function boot(payload) {
   await applyRoute(payload.route)
   const modules = Object.create(null)
   for (const item of payload.modules || []) modules[item.key] = evaluate(item, modules)
-  context = createForm(payload, payload.formData || payload.props?.formData || {})
+  context = createForm(payload, payload.formData || payload.props?.formData || {}, true)
   componentProps = reactive({ ...(payload.props || {}) })
   document.getElementById('component-style').textContent = payload.css || ''
   formCreate.component('studio-json-property', JsonProperty)
@@ -171,8 +208,8 @@ async function boot(payload) {
     for (const item of payload.modules || []) {
       if (!item.publishTargets?.includes('formCreate')) continue
       designer.value.addComponent({
-        name: 'lc-' + item.key, label: item.name || item.key, menu: 'studio-custom', icon: 'icon-input', input: true,
-        rule: () => ({ type: 'lc-' + item.key, field: 'field_' + Math.random().toString(36).slice(2), title: item.name || item.key, props: {} }),
+        name: 'lc-' + item.key, label: item.name || item.key, menu: 'studio-custom', icon: 'icon-input', input: item.key !== 'FormTopToolbar',
+        rule: () => item.key === 'FormTopToolbar' ? toolbarDesignerRule() : ({ type: 'lc-' + item.key, field: 'field_' + Math.random().toString(36).slice(2), title: item.name || item.key, props: {} }),
         props: () => propertyRules(item.propsSchema)
       })
     }
@@ -191,6 +228,14 @@ addEventListener('message', async event => {
   const message = event.data || {}
   if (event.source !== parent || event.origin !== config.parentOrigin || message.sessionId !== config.sessionId || message.componentId !== config.componentId) return
   try {
+    if (message.type === 'studio:submit-result') {
+      const request = submitRequests.get(message.requestId)
+      if (request) {
+        clearTimeout(request.timer); submitRequests.delete(message.requestId)
+        message.error ? request.reject(new Error(message.error)) : request.resolve(message.value)
+      }
+      return
+    }
     if (message.type === 'studio:run') {
       if (initialized) return
       initialized = true
@@ -209,6 +254,7 @@ addEventListener('message', async event => {
       if (!context.formApi.value) throw new Error('组件尚未挂载 FormCreate 表单')
       try { await context.formApi.value.validate() } catch { throw new Error('请检查表单必填项和校验提示') }
       result = plain(context.formApi.value.formData())
+      if (message.value?.includeMode) result = { values: result, mode: context.mode.value }
     } else throw new Error('未知运行容器操作')
     send('studio:reply', { requestId: message.requestId, value: result })
   } catch (error) {
@@ -216,5 +262,5 @@ addEventListener('message', async event => {
     else send('studio:error', { message: error.message || String(error) })
   }
 })
-addEventListener('beforeunload', () => { clearInterval(poll); app?.unmount() })
+addEventListener('beforeunload', () => { clearInterval(poll); for (const request of submitRequests.values()) clearTimeout(request.timer); submitRequests.clear(); app?.unmount() })
 send('studio:boot')

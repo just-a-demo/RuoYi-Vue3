@@ -8,7 +8,7 @@
 <script setup>
 import { ref, nextTick, onBeforeUnmount } from 'vue'
 import runtime from 'virtual:studio-runtime'
-const props = defineProps({ componentId: { type: [String, Number], required: true }, height: { type: String, default: '650px' }, title: { type: String, default: '组件运行容器' }, timeout: { type: Number, default: 15000 } })
+const props = defineProps({ componentId: { type: [String, Number], required: true }, height: { type: String, default: '650px' }, title: { type: String, default: '组件运行容器' }, timeout: { type: Number, default: 15000 }, submitHandler: Function })
 const emit = defineEmits(['status', 'console', 'design-change', 'form-change'])
 const frame = ref(), url = ref(''), error = ref(''), status = ref('idle')
 let session, payload, ready, resolveReady, rejectReady, timer, booted, counter = 0
@@ -28,6 +28,23 @@ function onMessage(event) {
   } else if (value.type === 'studio:console') emit('console', { level: value.level, args: (value.args || []).slice(0, 20) })
   else if (value.type === 'studio:design-change') emit('design-change', value.value)
   else if (value.type === 'studio:form-change') emit('form-change', value.value)
+  else if (value.type === 'studio:submit') handleSubmit(value)
+}
+let submission
+async function handleSubmit(message) {
+  const activeSession = session
+  try {
+    if (!submission) {
+      submission = Promise.resolve().then(() => props.submitHandler ? props.submitHandler() : { success: true, preview: true })
+      const active = submission
+      active.finally(() => { if (submission === active) submission = null }).catch(() => {})
+    }
+    const result = await submission
+    if (!result?.success) throw new Error(result?.message || '表单未能提交，请稍后重试')
+    if (session === activeSession) post({ type: 'studio:submit-result', requestId: message.requestId, value: { preview: Boolean(result.preview) } })
+  } catch (failure) {
+    if (session === activeSession) post({ type: 'studio:submit-result', requestId: message.requestId, error: failure.message || '提交失败' })
+  }
 }
 async function start(value) {
   dispose()
@@ -64,7 +81,7 @@ function dispose() {
   if (status.value === 'building') rejectReady?.(new Error('运行容器已关闭'))
   resolveReady = null; rejectReady = null
   for (const request of pending.values()) { clearTimeout(request.timer); request.reject(new Error('运行容器已关闭')) }
-  pending.clear()
+  pending.clear(); submission = null
   if (url.value) URL.revokeObjectURL(url.value)
   url.value = ''; payload = null; session = null; ready = null; setStatus('idle')
 }

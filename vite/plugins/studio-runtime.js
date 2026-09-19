@@ -8,7 +8,7 @@ export default function studioRuntime() {
   return {
     name: 'studio-runtime',
     handleHotUpdate(context) {
-      if (context.file.endsWith('/src/studio-runtime/frame.js')) {
+      if (context.file.replace(/\\/g, '/').includes('/src/studio-runtime/')) {
         bundle = undefined
         const module = context.server.moduleGraph.getModuleById(id)
         if (module) context.server.moduleGraph.invalidateModule(module)

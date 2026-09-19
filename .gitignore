@@ -26,3 +26,7 @@ package-lock.json
 yarn.lock
 
 /public/vendor
+
+# Generated browser-test captures
+/scripts/list-design-field-picker.png
+/scripts/list-design-preview.png

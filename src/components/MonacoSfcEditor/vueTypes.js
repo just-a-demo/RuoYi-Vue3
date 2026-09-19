@@ -22,6 +22,8 @@ export function registerVueTypes(monaco) {
         options: import('vue').Ref<import('@form-create/element-ui').Options>;
         formData: import('vue').Ref<Record<string, any>>;
         formApi: import('vue').Ref<import('@form-create/element-ui').Api | undefined>;
+        mode: import('vue').Ref<'view' | 'create' | 'edit'>;
+        submit(): Promise<{ values: Record<string, any>; preview: boolean }>;
       }
       export declare const inject: ((key: 'studioForm') => StudioForm) & typeof import('@vue/runtime-dom').inject;
     `

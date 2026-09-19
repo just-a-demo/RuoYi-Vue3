@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { syncFields, listColumns, filterRecords } from '../src/views/business/formModel/fields.js'
+import { syncFields, listColumns } from '../src/views/business/formModel/fields.js'
+import { previewQuery } from '../src/views/business/formModel/listConfig.js'
 import { compilePreview, componentDependencies } from '../src/views/vueStudio/component/previewCompiler.js'
 
 test('nested and conditional fields synchronize without retaining deleted fields', () => {
@@ -10,10 +11,11 @@ test('nested and conditional fields synchronize without retaining deleted fields
   assert.throws(() => syncFields([{ field: 'duplicate' }, { children: [{ field: 'duplicate' }] }]), /重复/)
 })
 test('list visibility, order, sorting and filters use model fields', () => {
-  const fields = [{ field: 'a', title: 'A', order: 2, visible: true, sortable: true, filter: true }, { field: 'b', title: 'B', order: 1, visible: true }, { field: 'c', visible: false }]
+  const fields = [{ field: 'a', valueType: 'text', title: 'A', order: 2, visible: true, sortable: true, filter: true }, { field: 'b', title: 'B', order: 1, visible: true }, { field: 'c', visible: false }]
   assert.deepEqual(listColumns(fields).map(c => c.field), ['b', 'a'])
-  assert.equal(listColumns(fields)[1].sort, true)
-  assert.deepEqual(filterRecords([{ a: 'one' }, { a: 'two' }], fields, { a: 'ONE', c: 'ignored' }), [{ a: 'one' }])
+  assert.equal(listColumns(fields)[1].sort, false) // Server owns sorting; VTable shows only the control.
+  assert.equal(listColumns(fields)[1].showSort, true)
+  assert.deepEqual(previewQuery([{ id: 1, values: { a: 'one' } }, { id: 2, values: { a: 'two' } }], fields, { conditions: [{ field: 'a', operator: 'contains', value: 'ONE' }], relation: 'and', pageNum: 1, pageSize: 20, sort: null }).rows.map(r => r.id), [1])
 })
 test('compiler permits published component imports and rejects invalid or external code', async () => {
   const source = '<template><Child /></template><script setup>import Child from "@lc/child"</script>'

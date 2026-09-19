@@ -1,7 +1,7 @@
 <template>
   <div class="sandbox-wrap" :class="background" :style="{ maxWidth: width + 'px' }">
     <div v-if="status === 'idle'" class="placeholder">尚未运行</div>
-    <StudioFrame ref="frame" :component-id="componentId" :height="height + 'px'" :timeout="timeout" title="Vue 组件隔离预览" @status="setStatus" @console="onConsole" @form-change="$emit('form-change', $event)" />
+    <StudioFrame ref="frame" :component-id="componentId" :height="height + 'px'" :timeout="timeout" :submit-handler="submitHandler" title="Vue 组件隔离预览" @status="setStatus" @console="onConsole" @form-change="$emit('form-change', $event)" />
     <el-alert v-if="error" :title="error" type="error" :closable="false" />
   </div>
 </template>
@@ -11,7 +11,7 @@ import StudioFrame from '@/components/StudioFrame/index.vue'
 import { compilePreview } from './previewCompiler'
 import { loadComponents } from '@/studio-runtime/loadComponents'
 import { loadProjectImports } from '@/studio-runtime/imports'
-const props = defineProps({ source: { type: String, default: '' }, componentId: { type: [String, Number], required: true }, width: { type: Number, default: 1280 }, height: { type: Number, default: 650 }, background: { type: String, default: 'light' }, timeout: { type: Number, default: 15000 }, showConsole: { type: Boolean, default: false } })
+const props = defineProps({ source: { type: String, default: '' }, componentId: { type: [String, Number], required: true }, width: { type: Number, default: 1280 }, height: { type: Number, default: 650 }, background: { type: String, default: 'light' }, timeout: { type: Number, default: 15000 }, showConsole: { type: Boolean, default: false }, submitHandler: Function })
 const emit = defineEmits(['status', 'console', 'form-change'])
 const frame = ref(), status = ref('idle'), error = ref('')
 let generation = 0
@@ -34,7 +34,7 @@ async function run(values = {}, options = {}) {
   }
 }
 const applyParameters = (values, route) => frame.value.request('apply', { props: values, route })
-const validateAndGetData = () => frame.value.request('validate')
+const validateAndGetData = options => frame.value.request('validate', options)
 function dispose() { ++generation; frame.value?.dispose(); setStatus('idle') }
 onBeforeUnmount(dispose)
 defineExpose({ run, applyParameters, validateAndGetData, dispose })

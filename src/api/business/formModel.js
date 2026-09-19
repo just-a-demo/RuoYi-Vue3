@@ -7,5 +7,5 @@ export const getApproval = (code, appId, silentError = false) => request({ url: 
 
 export const publishModel = id => request({ url: `/magic/web/requirements/business/formModel/${id}/publish`, method: 'post', timeout: 120000 })
 export const getPublishedModel = id => request({ url: `/magic/web/requirements/business/formModel/runtime/${id}` })
-export const getModelRecords = id => request({ url: `/magic/web/requirements/business/formModel/runtime/${id}/records` })
+export const getModelRecords = (id, query) => request({ url: `/magic/web/requirements/business/formModel/runtime/${id}/records${query ? '/query' : ''}`, method: query ? 'post' : 'get', data: query, headers: { repeatSubmit: false } })
 export const saveModelRecord = (id, recordId, data) => request({ url: `/magic/web/requirements/business/formModel/runtime/${id}/records${recordId ? '/' + recordId : ''}`, method: recordId ? 'put' : 'post', data })
